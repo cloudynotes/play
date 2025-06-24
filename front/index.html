@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multiplayer Game</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+        input { padding: 8px; margin: 5px; font-size: 14px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>Multiplayer Game</h1>
+    
+    <div class="section">
+        <h3>Create Room</h3>
+        <input type="text" id="adminName" placeholder="Your name">
+        <button onclick="createRoom()">Create Room</button>
+    </div>
+    
+    <div class="section">
+        <h3>Join Room</h3>
+        <input type="text" id="roomId" placeholder="Room ID">
+        <input type="text" id="playerName" placeholder="Your name">
+        <button onclick="joinRoom()">Join Room</button>
+    </div>
+    
+    <div id="result"></div>
+    <div id="players"></div>
+
+    <script>
+        let ws = null;
+        let currentRoomId = null;
+        async function createRoom() {
+            const name = document.getElementById('adminName').value;
+            if (!name) return alert('Enter your name');
+            
+            const response = await fetch('http://localhost:8000/room', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name})
+            });
+            
+            const data = await response.json();
+            currentRoomId = data.room_id;
+            window.currentPlayerId = data.player_id;
+            document.getElementById('result').innerHTML = 
+                `<h3>Room Created!</h3>
+                <p>Room ID: ${data.room_id}</p>
+                <p>Player: ${name} (Admin)</p>
+                <button onclick="startGame('${data.room_id}', '${data.player_id}')">Start Game</button>`;
+            
+            connectWebSocket(data.room_id, data.player_id);
+            updatePlayerList(data.room_id);
+        }
+        
+        async function joinRoom() {
+            const roomId = document.getElementById('roomId').value;
+            const name = document.getElementById('playerName').value;
+            if (!roomId || !name) return alert('Enter room ID and name');
+            
+            const response = await fetch(`http://localhost:8000/rooms/${roomId}/join`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name})
+            });
+            
+            const data = await response.json();
+            currentRoomId = data.room_id;
+            window.currentPlayerId = data.player_id;
+            document.getElementById('result').innerHTML = 
+                `<h3>Joined Room!</h3>
+                <p>Room ID: ${data.room_id}</p>
+                <p>Player: ${name}</p>`;
+            
+            connectWebSocket(data.room_id, data.player_id);
+            updatePlayerList(data.room_id);
+        }
+        
+        async function startGame(roomId, playerId) {
+            const response = await fetch(`http://localhost:8000/rooms/${roomId}/start?player_id=${playerId}`, {
+                method: 'POST'
+            });
+            
+            const data = await response.json();
+            document.getElementById('result').innerHTML += 
+                `<h3>Game Started!</h3>
+                <p>Your cards: ${JSON.stringify(data.player_cards[playerId])}</p>`;
+        }
+        
+        function connectWebSocket(roomId, playerId) {
+            ws = new WebSocket(`ws://localhost:8000/ws/${roomId}/${playerId}`);
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+            };
+            ws.onmessage = function(event) {
+                console.log('WebSocket message received:', event.data);
+                const msg = JSON.parse(event.data);
+                console.log('Parsed message:', msg);
+                if (msg.type === 'game_started') {
+                    console.log('Game started message, player cards:', msg.player_cards);
+                    displayGameCards(msg.player_cards, window.currentPlayerId);
+                } else {
+                    console.log('Other message type, updating player list');
+                    updatePlayerList(roomId);
+                }
+            };
+            ws.onerror = function(error) {
+                console.log('WebSocket error:', error);
+            };
+        }
+        
+        async function updatePlayerList(roomId) {
+            const response = await fetch(`http://localhost:8000/rooms/${roomId}`);
+            const data = await response.json();
+            
+            const playersList = data.players.map(p => 
+                `<li>${p.name} ${p.role === 'admin' ? '(Admin)' : ''}</li>`
+            ).join('');
+            
+            document.getElementById('players').innerHTML = 
+                `<h3>Players in Room (${data.players.length}/10):</h3>
+                <ul>${playersList}</ul>`;
+        }
+        
+        function displayGameCards(allPlayerCards, myPlayerId) {
+            console.log('displayGameCards called with:', allPlayerCards, myPlayerId);
+            const myCards = allPlayerCards[myPlayerId];
+            console.log('My cards:', myCards);
+            document.getElementById('result').innerHTML += 
+                `<h3>Game Started!</h3>
+                <p><strong>Your Cards:</strong> ${myCards ? myCards.join(', ') : 'No cards found'}</p>`;
+        }
+    </script>
+</body>
+</html>
