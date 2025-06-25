@@ -3,30 +3,7 @@
 
 <head>
     <title>Multiplayer Game</title>
-    <style>
-        body {
-            font-family: Arial;
-            padding: 20px;
-        }
-
-        button {
-            padding: 10px 20px;
-            margin: 10px;
-            font-size: 16px;
-        }
-
-        input {
-            padding: 8px;
-            margin: 5px;
-            font-size: 14px;
-        }
-
-        .section {
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #ccc;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/join.js"></script>
 </head>
 
@@ -191,7 +168,9 @@
             console.log('Shared cards:', sharedCards);
 
             const myCardsHtml = myCards ? myCards.map(card =>
-                `<button onclick="selectCard(${card})" style="margin:2px;padding:5px;">${card}</button>`
+                `<button onclick="selectCard(${card})" style="margin:2px;padding:2px;border:none;background:none;">
+                    <img src="/static/cards/${card}.png" alt="Card ${card}" class="card-image" style="width:60px;height:auto;cursor:pointer;">
+                </button>`
             ).join('') : 'No cards found';
 
             const sharedCardsHtml = sharedCards ? sharedCards.map((card, index) => 
@@ -213,6 +192,12 @@
         }
 
         async function selectCard(card) {
+            // Immediately hide the selected card
+            const cardButton = event.target.closest('button');
+            if (cardButton) {
+                cardButton.style.display = 'none';
+            }
+            
             const response = await fetch(`http://localhost:8000/rooms/${currentRoomId}/select?player_id=${window.currentPlayerId}&card=${card}`, {
                 method: 'POST'
             });
@@ -221,13 +206,19 @@
                 console.log(`Selected card: ${card}`);
             } else {
                 alert('Failed to select card');
+                // Show card again if selection failed
+                if (cardButton) {
+                    cardButton.style.display = 'inline-block';
+                }
             }
         }
 
         function updatePlayerCards(allPlayerCards) {
             const myCards = allPlayerCards[window.currentPlayerId];
             const myCardsHtml = myCards ? myCards.map(card =>
-                `<button onclick="selectCard(${card})" style="margin:2px;padding:5px;">${card}</button>`
+                `<button onclick="selectCard(${card})" style="margin:2px;padding:2px;border:none;background:none;">
+                    <img src="/static/cards/${card}.png" alt="Card ${card}" class="card-image" style="width:60px;height:auto;cursor:pointer;">
+                </button>`
             ).join('') : 'No cards left';
 
             const resultDiv = document.getElementById('result');
@@ -268,7 +259,7 @@
                 const pileElement = document.getElementById(`pile${pileIndex}`);
                 if (pileElement && pileCards.length > 0) {
                     const cardsHtml = pileCards.map(card => 
-                        `<span style="padding:3px 8px;margin:2px;border:1px solid #999;background:#f0f0f0;">${card}</span>`
+                        `<img src="/static/cards/${card}.png" alt="Card ${card}" class="card-image" style="width:40px;height:auto;margin:2px;">`
                     ).join('');
                     pileElement.innerHTML = cardsHtml;
                 }

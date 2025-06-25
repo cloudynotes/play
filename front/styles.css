@@ -1,0 +1,32 @@
+body {
+    font-family: Arial;
+    padding: 20px;
+}
+
+button {
+    padding: 10px 20px;
+    margin: 10px;
+    font-size: 16px;
+}
+
+input {
+    padding: 8px;
+    margin: 5px;
+    font-size: 14px;
+}
+
+.section {
+    margin: 20px 0;
+    padding: 20px;
+    border: 1px solid #ccc;
+}
+
+.card-image {
+    transition: transform 0.2s ease;
+}
+
+.card-image:hover {
+    transform: scale(1.5);
+    z-index: 1000;
+    position: relative;
+}
