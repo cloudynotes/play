@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -14,6 +14,7 @@ app = FastAPI(title="Multiplayer Game")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -149,6 +150,24 @@ async def start_game(room_id: str, player_id: str):
         print(f"No connections found for room {room_id}")
     
     return {"message": "Game started", "room_id": room_id}
+
+@app.websocket("/ws/{room_id}/{player_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str):
+    await websocket.accept()
+    
+    # Add connection to room
+    if room_id not in connections:
+        connections[room_id] = []
+    connections[room_id].append(websocket)
+    
+    try:
+        while True:
+            # Keep connection alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        # Remove connection when client disconnects
+        if room_id in connections:
+            connections[room_id].remove(websocket)
 
 @app.post("/rooms/{room_id}/select")
 async def select_card(room_id: str, player_id: str, card: int):

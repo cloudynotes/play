@@ -67,7 +67,7 @@ async function createRoom() {
     const name = document.getElementById('adminName').value;
     if (!name) return alert('Enter your name');
 
-    const response = await fetch('http://localhost:8000/room', {
+    const response = await fetch('/room', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -90,7 +90,7 @@ async function joinRoom() {
     const name = document.getElementById('playerName').value;
     if (!roomId || !name) return alert('Enter room ID and name');
 
-    const response = await fetch(`http://localhost:8000/rooms/${roomId}/join`, {
+    const response = await fetch(`/rooms/${roomId}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -119,7 +119,7 @@ async function joinRoom() {
 }
 
 async function startGame(roomId, playerId) {
-    const response = await fetch(`http://localhost:8000/rooms/${roomId}/start?player_id=${playerId}`, {
+    const response = await fetch(`/rooms/${roomId}/start?player_id=${playerId}`, {
         method: 'POST'
     });
 
@@ -130,7 +130,9 @@ async function startGame(roomId, playerId) {
 }
 
 function connectWebSocket(roomId, playerId) {
-    ws = new WebSocket(`ws://localhost:8000/ws/${roomId}/${playerId}`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    ws = new WebSocket(`${protocol}//${host}/ws/${roomId}/${playerId}`);
     ws.onopen = () => console.log('WebSocket connected');
     ws.onmessage = (event) => handleWebSocketMessage(event.data, roomId);
     ws.onerror = (error) => console.log('WebSocket error:', error);
@@ -173,7 +175,7 @@ function handleWebSocketMessage(data, roomId) {
 }
 
 async function updatePlayerList(roomId) {
-    const response = await fetch(`http://localhost:8000/rooms/${roomId}`);
+    const response = await fetch(`/rooms/${roomId}`);
     const data = await response.json();
     const playersList = data.players.map(p =>
         `<li>${p.name} ${p.role === 'admin' ? '(Admin)' : ''}</li>`
@@ -212,7 +214,7 @@ async function selectCard(card) {
     const cardButton = event.target.closest('button');
     if (cardButton) cardButton.style.display = 'none';
 
-    const response = await fetch(`http://localhost:8000/rooms/${currentRoomId}/select?player_id=${window.currentPlayerId}&card=${card}`, {
+    const response = await fetch(`/rooms/${currentRoomId}/select?player_id=${window.currentPlayerId}&card=${card}`, {
         method: 'POST'
     });
 
@@ -287,7 +289,7 @@ function showPileSelection(card) {
 }
 
 async function selectPileForPenalty(pileIdx, lowCard) {
-    const response = await fetch(`http://localhost:8000/rooms/${currentRoomId}/take_pile?player_id=${window.currentPlayerId}&pile_idx=${pileIdx}&low_card=${lowCard}`, {
+    const response = await fetch(`/rooms/${currentRoomId}/take_pile?player_id=${window.currentPlayerId}&pile_idx=${pileIdx}&low_card=${lowCard}`, {
         method: 'POST'
     });
     if (response.ok) {
