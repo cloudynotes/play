@@ -250,7 +250,9 @@ async def select_card(room_id: str, player_id: str, card: int):
                 
                 if game.next_round():
                     rooms[room_id]["current_round"] = game.current_round
-                    # Broadcast round end with reset player status
+                    # Broadcast round end with reset player status after a delay
+                    import asyncio
+                    await asyncio.sleep(3.5)  # Wait for round finished message to be seen
                     if room_id in connections and connections[room_id]:
                         # Reset all players to thinking for new round
                         reset_player_status = {}
@@ -268,6 +270,24 @@ async def select_card(room_id: str, player_id: str, card: int):
                                 connections[room_id].remove(ws)
                 else:
                     rooms[room_id]["status"] = "finished"
+                    # Find winner (player with lowest penalty points)
+                    min_points = min(game.player_points.values())
+                    winner_id = next(pid for pid, points in game.player_points.items() if points == min_points)
+                    winner_name = next(p["name"] for p in rooms[room_id]["players"] if p["id"] == winner_id)
+                    
+                    # Broadcast game finished with winner
+                    if room_id in connections and connections[room_id]:
+                        finish_game_message = {
+                            "type": "game_finished",
+                            "winner_name": winner_name,
+                            "winner_points": min_points,
+                            "final_scores": {pid: {"name": next(p["name"] for p in rooms[room_id]["players"] if p["id"] == pid), "points": points} for pid, points in game.player_points.items()}
+                        }
+                        for ws in connections[room_id][:]:
+                            try:
+                                await ws.send_text(json.dumps(finish_game_message))
+                            except Exception as e:
+                                connections[room_id].remove(ws)
         else:
             # Broadcast card selection with player status
             if room_id in connections and connections[room_id]:
@@ -360,7 +380,9 @@ async def take_pile(room_id: str, player_id: str, pile_idx: int, low_card: int):
         
         if game.next_round():
             rooms[room_id]["current_round"] = game.current_round
-            # Broadcast round end with reset player status
+            # Broadcast round end with reset player status after a delay
+            import asyncio
+            await asyncio.sleep(3.5)  # Wait for round finished message to be seen
             if room_id in connections and connections[room_id]:
                 # Reset all players to thinking for new round
                 reset_player_status = {}
@@ -378,6 +400,24 @@ async def take_pile(room_id: str, player_id: str, pile_idx: int, low_card: int):
                         connections[room_id].remove(ws)
         else:
             rooms[room_id]["status"] = "finished"
+            # Find winner (player with lowest penalty points)
+            min_points = min(game.player_points.values())
+            winner_id = next(pid for pid, points in game.player_points.items() if points == min_points)
+            winner_name = next(p["name"] for p in rooms[room_id]["players"] if p["id"] == winner_id)
+            
+            # Broadcast game finished with winner
+            if room_id in connections and connections[room_id]:
+                finish_game_message = {
+                    "type": "game_finished",
+                    "winner_name": winner_name,
+                    "winner_points": min_points,
+                    "final_scores": {pid: {"name": next(p["name"] for p in rooms[room_id]["players"] if p["id"] == pid), "points": points} for pid, points in game.player_points.items()}
+                }
+                for ws in connections[room_id][:]:
+                    try:
+                        await ws.send_text(json.dumps(finish_game_message))
+                    except Exception as e:
+                        connections[room_id].remove(ws)
     return {"message": "Pile taken", "penalty_points": penalty_points, "more_penalties": more_penalties}
 
 @app.websocket("/ws/{room_id}/{player_id}")
