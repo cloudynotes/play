@@ -175,6 +175,9 @@ function handleWebSocketMessage(data, roomId) {
             updateRoundDisplay(msg.next_round);
             updatePlayerStatus(msg.player_status);
             break;
+        case 'game_finished':
+            showGameFinished(msg.winner_name, msg.winner_points, msg.final_scores);
+            break;
         default:
             updatePlayerList(roomId);
     }
@@ -291,19 +294,36 @@ function updatePlayerPoints(points) {
 function handlePlacementResults(results) {
     results.forEach(result => {
         if (result.player_id === window.currentPlayerId && result.action === 'penalty_required') {
-            showPileSelection(result.card);
+            showPenaltyNotification(result.card);
+            enablePileSelection(result.card);
         }
     });
 }
 
-function showPileSelection(card) {
-    const buttons = Array.from({ length: 4 }, (_, i) =>
-        `<button onclick="selectPileForPenalty(${i}, ${card})" style="margin:5px;padding:10px;">Take Pile ${i + 1}</button>`
-    ).join('');
-    document.getElementById('roundResults').innerHTML +=
-        `<div style="background:#ffcccc;padding:10px;margin:10px;">
-            <h4>Your card ${card} is too low! Select a pile to take:</h4>${buttons}
-        </div>`;
+function showPenaltyNotification(card) {
+    freezeCardSelection();
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = 'background:#ffcccc;border:1px solid #f5c6cb;color:#721c24;padding:10px;margin:10px 0;border-radius:5px;text-align:center;font-weight:bold;';
+    messageDiv.textContent = `Your card ${card} is too low! Click on a pile to take it.`;
+    messageDiv.id = 'penalty-notification';
+    
+    const statusDiv = document.getElementById('playerStatus');
+    if (statusDiv) {
+        statusDiv.appendChild(messageDiv);
+    }
+}
+
+function enablePileSelection(card) {
+    window.penaltyCard = card;
+    // Make piles clickable
+    for (let i = 0; i < 4; i++) {
+        const pileElement = document.getElementById(`pile${i}`);
+        if (pileElement) {
+            pileElement.style.cursor = 'pointer';
+            pileElement.style.border = '2px solid #dc3545';
+            pileElement.onclick = () => selectPileForPenalty(i, card);
+        }
+    }
 }
 
 async function selectPileForPenalty(pileIdx, lowCard) {
@@ -318,10 +338,24 @@ async function selectPileForPenalty(pileIdx, lowCard) {
 }
 
 function clearPenaltyNotification() {
-    document.querySelectorAll('[style*="background:#ffcccc"]').forEach(box => box.remove());
+    const notification = document.getElementById('penalty-notification');
+    if (notification) notification.remove();
+    
+    // Remove pile selection styling
+    for (let i = 0; i < 4; i++) {
+        const pileElement = document.getElementById(`pile${i}`);
+        if (pileElement) {
+            pileElement.style.cursor = 'default';
+            pileElement.style.border = 'none';
+            pileElement.onclick = null;
+        }
+    }
+    window.penaltyCard = null;
+    unfreezeCardSelection();
 }
 
 function showRoundFinishedMessage(round, message) {
+    freezeCardSelection();
     const messageDiv = document.createElement('div');
     messageDiv.style.cssText = 'background:#d4edda;border:1px solid #c3e6cb;color:#155724;padding:10px;margin:10px 0;border-radius:5px;text-align:center;font-weight:bold;';
     messageDiv.textContent = message;
@@ -329,7 +363,10 @@ function showRoundFinishedMessage(round, message) {
     const statusDiv = document.getElementById('playerStatus');
     if (statusDiv) {
         statusDiv.appendChild(messageDiv);
-        setTimeout(() => messageDiv.remove(), 3000);
+        setTimeout(() => {
+            messageDiv.remove();
+            unfreezeCardSelection();
+        }, 3000);
     }
 }
 
@@ -360,6 +397,45 @@ function updatePlayerStatus(playerStatus) {
         // Re-append preserved messages
         existingMessages.forEach(msg => statusDiv.appendChild(msg));
     }
+}
+
+function showGameFinished(winnerName, winnerPoints, finalScores) {
+    freezeCardSelection();
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = 'background:#28a745;border:1px solid #1e7e34;color:white;padding:20px;margin:20px 0;border-radius:10px;text-align:center;font-weight:bold;font-size:18px;';
+    
+    const scoresHtml = Object.entries(finalScores).map(([pid, info]) => 
+        `<li>${info.name}: ${info.points} points</li>`
+    ).join('');
+    
+    messageDiv.innerHTML = `
+        <h2>🎉 Game Finished! 🎉</h2>
+        <h3>Winner: ${winnerName}</h3>
+        <p>With only ${winnerPoints} penalty points!</p>
+        <h4>Final Scores:</h4>
+        <ul style="text-align:left;display:inline-block;">${scoresHtml}</ul>
+    `;
+    
+    const statusDiv = document.getElementById('playerStatus');
+    if (statusDiv) {
+        statusDiv.appendChild(messageDiv);
+    }
+}
+
+function freezeCardSelection() {
+    const cardButtons = document.querySelectorAll('.card-button');
+    cardButtons.forEach(button => {
+        button.style.pointerEvents = 'none';
+        button.style.opacity = '0.5';
+    });
+}
+
+function unfreezeCardSelection() {
+    const cardButtons = document.querySelectorAll('.card-button');
+    cardButtons.forEach(button => {
+        button.style.pointerEvents = 'auto';
+        button.style.opacity = '1';
+    });
 }
 
 function updateRoundDisplay(roundNumber) {

@@ -250,9 +250,7 @@ async def select_card(room_id: str, player_id: str, card: int):
                 
                 if game.next_round():
                     rooms[room_id]["current_round"] = game.current_round
-                    # Broadcast round end with reset player status after a delay
-                    import asyncio
-                    await asyncio.sleep(3.5)  # Wait for round finished message to be seen
+                    # Broadcast round end with reset player status
                     if room_id in connections and connections[room_id]:
                         # Reset all players to thinking for new round
                         reset_player_status = {}
@@ -362,9 +360,7 @@ async def take_pile(room_id: str, player_id: str, pile_idx: int, low_card: int):
         
         if game.next_round():
             rooms[room_id]["current_round"] = game.current_round
-            # Broadcast round end with reset player status after a delay
-            import asyncio
-            await asyncio.sleep(3.5)  # Wait for round finished message to be seen
+            # Broadcast round end with reset player status
             if room_id in connections and connections[room_id]:
                 # Reset all players to thinking for new round
                 reset_player_status = {}
@@ -382,7 +378,6 @@ async def take_pile(room_id: str, player_id: str, pile_idx: int, low_card: int):
                         connections[room_id].remove(ws)
         else:
             rooms[room_id]["status"] = "finished"
-    
     return {"message": "Pile taken", "penalty_points": penalty_points, "more_penalties": more_penalties}
 
 @app.websocket("/ws/{room_id}/{player_id}")
