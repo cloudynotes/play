@@ -152,7 +152,6 @@ function handleWebSocketMessage(data, roomId) {
             updatePlayerStatus(msg.player_status);
             break;
         case 'round_complete':
-            showRoundResults(msg.round, msg.results);
             updatePlayerCards(msg.player_cards);
             updateLastSelected(msg.last_selected);
             updateSharedPiles(msg.shared_piles);
@@ -195,8 +194,11 @@ async function updatePlayerList(roomId) {
 function displayGameCards(allPlayerCards, myPlayerId, sharedCards) {
     const myCards = allPlayerCards[myPlayerId] || [];
     const myCardsHtml = myCards.map(card =>
-        `<button onclick="selectCard(${card})" style="margin:2px;padding:2px;border:none;background:none;">
-            <img src="/static/cards/${card}.png" alt="Card ${card}" class="card-image" style="width:60px;height:auto;cursor:pointer;">
+        `<button onclick="selectCard(${card})" class="card-button">
+            <div class="card">
+                <div class="card-number">${card}</div>
+                <div class="card-bulls">${getBullPoints(card)}</div>
+            </div>
         </button>`
     ).join('');
     const sharedCardsHtml = sharedCards.map((_, i) =>
@@ -235,8 +237,11 @@ async function selectCard(card) {
 function updatePlayerCards(allPlayerCards) {
     const myCards = allPlayerCards[window.currentPlayerId] || [];
     const myCardsHtml = myCards.map(card =>
-        `<button onclick="selectCard(${card})" style="margin:2px;padding:2px;border:none;background:none;">
-            <img src="/static/cards/${card}.png" alt="Card ${card}" class="card-image" style="width:60px;height:auto;cursor:pointer;">
+        `<button onclick="selectCard(${card})" class="card-button">
+            <div class="card">
+                <div class="card-number">${card}</div>
+                <div class="card-bulls">${getBullPoints(card)}</div>
+            </div>
         </button>`
     ).join('');
 
@@ -246,13 +251,7 @@ function updatePlayerCards(allPlayerCards) {
     );
 }
 
-function showRoundResults(round, results) {
-    const resultsHtml = Object.entries(results).map(([pid, card]) =>
-        `<li>Player ${pid.slice(0, 4)}: ${card}</li>`
-    ).join('');
-    const roundResultsDiv = document.getElementById('roundResults');
-    roundResultsDiv.innerHTML = `<h4>Round ${round} Results:</h4><ul>${resultsHtml}</ul>`;
-}
+
 
 function updateLastSelected(lastSelectedCards) {
     const myLastCard = lastSelectedCards[window.currentPlayerId];
@@ -267,10 +266,21 @@ function updateSharedPiles(sharedPiles) {
         const pileElement = document.getElementById(`pile${i}`);
         if (pileElement) {
             pileElement.innerHTML = pileCards.map(card =>
-                `<img src="/static/cards/${card}.png" alt="Card ${card}" style="width:40px;height:auto;margin:2px;">`
+                `<div class="card small" style="margin:2px;display:inline-block;">
+                    <div class="card-number">${card}</div>
+                    <div class="card-bulls">${getBullPoints(card)}</div>
+                </div>`
             ).join('');
         }
     }
+}
+
+function getBullPoints(card) {
+    if (card === 55) return 7;
+    if (card % 11 === 0) return 5;
+    if (card % 10 === 0) return 3;
+    if (card % 5 === 0) return 2;
+    return 1;
 }
 
 function updatePlayerPoints(points) {
@@ -315,11 +325,10 @@ function showRoundFinishedMessage(round, message) {
     const messageDiv = document.createElement('div');
     messageDiv.style.cssText = 'background:#d4edda;border:1px solid #c3e6cb;color:#155724;padding:10px;margin:10px 0;border-radius:5px;text-align:center;font-weight:bold;';
     messageDiv.textContent = message;
-    
-    const resultDiv = document.getElementById('result');
-    const roundResults = document.getElementById('roundResults');
-    if (roundResults) {
-        roundResults.appendChild(messageDiv);
+
+    const statusDiv = document.getElementById('playerStatus');
+    if (statusDiv) {
+        statusDiv.appendChild(messageDiv);
         setTimeout(() => messageDiv.remove(), 3000);
     }
 }
@@ -343,7 +352,13 @@ function updatePlayerStatus(playerStatus) {
                 ${statusIcon} ${info.name}: ${info.status}
             </span>`;
         }).join('');
+        
+        // Preserve any existing round finished messages
+        const existingMessages = statusDiv.querySelectorAll('[style*="background:#d4edda"]');
         statusDiv.innerHTML = `<strong>Player Status:</strong><br>${statusHtml}`;
+        
+        // Re-append preserved messages
+        existingMessages.forEach(msg => statusDiv.appendChild(msg));
     }
 }
 
