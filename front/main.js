@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Hide create room section, only show join section
         document.getElementById('createRoomSection').style.display = 'none';
         document.getElementById('joinRoomSection').style.display = 'block';
-        document.getElementById('gameTitle').textContent = 'Join Game Room';
+        //document.getElementById('gameTitle').textContent = 'Join Game Room';
 
         // If we have stored credentials, auto-join
         const storedRoomId = localStorage.getItem('currentRoomId');
@@ -144,10 +144,12 @@ function handleWebSocketMessage(data, roomId) {
         case 'game_started':
             displayGameCards(msg.player_cards, window.currentPlayerId, msg.shared_cards);
             updateSharedPiles(msg.shared_piles);
+            updatePlayerStatus(msg.player_status);
             break;
         case 'card_selected':
             updatePlayerCards(msg.player_cards);
             updateLastSelected(msg.last_selected);
+            updatePlayerStatus(msg.player_status);
             break;
         case 'round_complete':
             showRoundResults(msg.round, msg.results);
@@ -155,6 +157,7 @@ function handleWebSocketMessage(data, roomId) {
             updateLastSelected(msg.last_selected);
             updateSharedPiles(msg.shared_piles);
             updatePlayerPoints(msg.player_points);
+            updatePlayerStatus(msg.player_status);
             if (msg.penalty_needed) handlePlacementResults(msg.placement_results);
             break;
         case 'pile_taken':
@@ -166,8 +169,12 @@ function handleWebSocketMessage(data, roomId) {
                 updateRoundDisplay(msg.current_round);
             }
             break;
+        case 'round_finished':
+            showRoundFinishedMessage(msg.round, msg.message);
+            break;
         case 'round_ended':
             updateRoundDisplay(msg.next_round);
+            updatePlayerStatus(msg.player_status);
             break;
         default:
             updatePlayerList(roomId);
@@ -194,7 +201,7 @@ function displayGameCards(allPlayerCards, myPlayerId, sharedCards) {
     ).join('');
     const sharedCardsHtml = sharedCards.map((_, i) =>
         `<div style="margin:5px 0;padding:10px;border:1px solid #ccc;">
-            <strong>Pile ${i + 1}:</strong>
+            <strong>Pile ${i + 1}</strong>
             <div id="pile${i}" style="margin-top:5px;"></div>
         </div>`
     ).join('');
@@ -204,6 +211,7 @@ function displayGameCards(allPlayerCards, myPlayerId, sharedCards) {
         <p><strong>Round: 1/10</strong></p>
         <p><strong>Your Points:</strong> <span id="myPoints">0</span></p>
         <p><strong>Your Last Selected:</strong> <span id="lastSelected">None</span></p>
+        <div id="playerStatus" style="margin:10px 0;padding:10px;border:1px solid #ddd;border-radius:5px;"></div>
         <p><strong>Your Cards:</strong><br>${myCardsHtml}</p>
         <p><strong>Shared Piles:</strong></p>
         <div>${sharedCardsHtml}</div>
@@ -242,8 +250,8 @@ function showRoundResults(round, results) {
     const resultsHtml = Object.entries(results).map(([pid, card]) =>
         `<li>Player ${pid.slice(0, 4)}: ${card}</li>`
     ).join('');
-    document.getElementById('roundResults').innerHTML =
-        `<h4>Round ${round} Results:</h4><ul>${resultsHtml}</ul>`;
+    const roundResultsDiv = document.getElementById('roundResults');
+    roundResultsDiv.innerHTML = `<h4>Round ${round} Results:</h4><ul>${resultsHtml}</ul>`;
 }
 
 function updateLastSelected(lastSelectedCards) {
@@ -301,6 +309,42 @@ async function selectPileForPenalty(pileIdx, lowCard) {
 
 function clearPenaltyNotification() {
     document.querySelectorAll('[style*="background:#ffcccc"]').forEach(box => box.remove());
+}
+
+function showRoundFinishedMessage(round, message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = 'background:#d4edda;border:1px solid #c3e6cb;color:#155724;padding:10px;margin:10px 0;border-radius:5px;text-align:center;font-weight:bold;';
+    messageDiv.textContent = message;
+    
+    const resultDiv = document.getElementById('result');
+    const roundResults = document.getElementById('roundResults');
+    if (roundResults) {
+        roundResults.appendChild(messageDiv);
+        setTimeout(() => messageDiv.remove(), 3000);
+    }
+}
+
+function updatePlayerStatus(playerStatus) {
+    const statusDiv = document.getElementById('playerStatus');
+    if (statusDiv && playerStatus) {
+        const statusHtml = Object.entries(playerStatus).map(([pid, info]) => {
+            let statusColor, statusIcon;
+            if (info.status === 'played') {
+                statusColor = '#28a745';
+                statusIcon = '✓';
+            } else if (info.status === 'penalty') {
+                statusColor = '#dc3545';
+                statusIcon = '⚠️';
+            } else {
+                statusColor = '#ffc107';
+                statusIcon = '🤔';
+            }
+            return `<span style="display:inline-block;margin:5px;padding:5px 10px;background:${statusColor};color:white;border-radius:15px;font-size:12px;">
+                ${statusIcon} ${info.name}: ${info.status}
+            </span>`;
+        }).join('');
+        statusDiv.innerHTML = `<strong>Player Status:</strong><br>${statusHtml}`;
+    }
 }
 
 function updateRoundDisplay(roundNumber) {

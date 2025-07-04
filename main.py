@@ -9,7 +9,7 @@ import json
 import os
 from game_logic import Game
 
-app = FastAPI(title="Multiplayer Game")
+app = FastAPI(title="6 Nimmt!")
 
 app.add_middleware(
     CORSMiddleware,
@@ -137,7 +137,15 @@ async def start_game(room_id: str, player_id: str):
     # Broadcast game start to all players
     print(f"Starting game for room {room_id} with {len(connections.get(room_id, []))} connections")
     if room_id in connections and connections[room_id]:
-        message = {"type": "game_started", "player_cards": game_data["player_cards"], "shared_cards": game_data["shared_cards"], "player_points": game_data["player_points"], "shared_piles": game_data["shared_piles"], "current_round": 1}
+        # Initialize player status - all thinking at start
+        player_status = {}
+        for player in rooms[room_id]["players"]:
+            player_status[player["id"]] = {
+                "name": player["name"],
+                "status": "thinking"
+            }
+        
+        message = {"type": "game_started", "player_cards": game_data["player_cards"], "shared_cards": game_data["shared_cards"], "player_points": game_data["player_points"], "shared_piles": game_data["shared_piles"], "current_round": 1, "player_status": player_status}
         print(f"Broadcasting game start to {len(connections[room_id])} connections")
         for ws in connections[room_id][:]:
             try:
@@ -196,6 +204,17 @@ async def select_card(room_id: str, player_id: str, card: int):
             
             # Broadcast round results
             if room_id in connections and connections[room_id]:
+                # Get player status - check for penalty needed
+                player_status = {}
+                for player in rooms[room_id]["players"]:
+                    pid = player["id"]
+                    # Check if this player needs to resolve penalty
+                    needs_penalty = any(result["action"] == "penalty_required" and result["player_id"] == pid for result in placement_results)
+                    player_status[pid] = {
+                        "name": player["name"],
+                        "status": "penalty" if needs_penalty else "played"
+                    }
+                
                 message = {
                     "type": "round_complete", 
                     "round": game.current_round,
@@ -205,7 +224,8 @@ async def select_card(room_id: str, player_id: str, card: int):
                     "shared_piles": game.shared_piles,
                     "player_points": game.player_points,
                     "placement_results": placement_results,
-                    "penalty_needed": penalty_needed
+                    "penalty_needed": penalty_needed,
+                    "player_status": player_status
                 }
                 for ws in connections[room_id][:]:
                     try:
@@ -215,20 +235,60 @@ async def select_card(room_id: str, player_id: str, card: int):
             
             # Only move to next round if no penalty is needed
             if not penalty_needed:
+                # Broadcast round finished message
+                if room_id in connections and connections[room_id]:
+                    finish_message = {
+                        "type": "round_finished",
+                        "round": game.current_round,
+                        "message": f"Round {game.current_round} is finished! Ready for next round."
+                    }
+                    for ws in connections[room_id][:]:
+                        try:
+                            await ws.send_text(json.dumps(finish_message))
+                        except Exception as e:
+                            connections[room_id].remove(ws)
+                
                 if game.next_round():
                     rooms[room_id]["current_round"] = game.current_round
+                    # Broadcast round end with reset player status
+                    if room_id in connections and connections[room_id]:
+                        # Reset all players to thinking for new round
+                        reset_player_status = {}
+                        for player in rooms[room_id]["players"]:
+                            reset_player_status[player["id"]] = {
+                                "name": player["name"],
+                                "status": "thinking"
+                            }
+                        
+                        end_message = {"type": "round_ended", "next_round": game.current_round, "player_status": reset_player_status}
+                        for ws in connections[room_id][:]:
+                            try:
+                                await ws.send_text(json.dumps(end_message))
+                            except Exception as e:
+                                connections[room_id].remove(ws)
                 else:
                     rooms[room_id]["status"] = "finished"
         else:
-            # Broadcast card selection
+            # Broadcast card selection with player status
             if room_id in connections and connections[room_id]:
+                # Get player status for current round
+                player_status = {}
+                for player in rooms[room_id]["players"]:
+                    pid = player["id"]
+                    has_played = game.player_round_status.get(pid, False)
+                    player_status[pid] = {
+                        "name": player["name"],
+                        "status": "played" if has_played else "thinking"
+                    }
+                
                 message = {
                     "type": "card_selected", 
                     "player_id": player_id, 
                     "card": card, 
                     "round": game.current_round,
                     "player_cards": game.player_cards,
-                    "last_selected": game.player_last_card
+                    "last_selected": game.player_last_card,
+                    "player_status": player_status
                 }
                 for ws in connections[room_id][:]:
                     try:
@@ -285,11 +345,32 @@ async def take_pile(room_id: str, player_id: str, pile_idx: int, low_card: int):
     
     # If all cards processed, move to next round
     if all_cards_processed and not more_penalties:
+        # Broadcast round finished message
+        if room_id in connections and connections[room_id]:
+            finish_message = {
+                "type": "round_finished",
+                "round": game.current_round,
+                "message": f"Round {game.current_round} is finished! Ready for next round."
+            }
+            for ws in connections[room_id][:]:
+                try:
+                    await ws.send_text(json.dumps(finish_message))
+                except Exception as e:
+                    connections[room_id].remove(ws)
+        
         if game.next_round():
             rooms[room_id]["current_round"] = game.current_round
-            # Broadcast round end
+            # Broadcast round end with reset player status
             if room_id in connections and connections[room_id]:
-                end_message = {"type": "round_ended", "next_round": game.current_round}
+                # Reset all players to thinking for new round
+                reset_player_status = {}
+                for player in rooms[room_id]["players"]:
+                    reset_player_status[player["id"]] = {
+                        "name": player["name"],
+                        "status": "thinking"
+                    }
+                
+                end_message = {"type": "round_ended", "next_round": game.current_round, "player_status": reset_player_status}
                 for ws in connections[room_id][:]:
                     try:
                         await ws.send_text(json.dumps(end_message))
